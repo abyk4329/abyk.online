@@ -11,28 +11,19 @@ import { SPLASH_VIDEO } from "@/lib/constants"
 import { useTheme } from "@/components/theme-provider"
 import { PencilCard } from "@/components/ui/pencil-card"
 
-function getInitialIsDark() {
-  if (typeof window === "undefined") return false
-  // Read directly from <html> class - next-themes sets this via an inline script before React hydrates
-  return document.documentElement.classList.contains("dark")
-}
-
 export default function HomePage() {
   const { resolvedTheme } = useTheme()
-  const [isDark, setIsDark] = useState(getInitialIsDark)
-  const [showSplash, setShowSplash] = useState(() => {
-    if (typeof window !== "undefined") {
-      const lastSplash = sessionStorage.getItem("abyk-splash-shown")
-      return !lastSplash
-    }
-    return true
-  })
+  const isDark = resolvedTheme === "dark"
+  const [mounted, setMounted] = useState(false)
+  const [showSplash, setShowSplash] = useState(false)
 
   useEffect(() => {
-    if (resolvedTheme) {
-      setIsDark(resolvedTheme === "dark")
+    setMounted(true)
+    const lastSplash = sessionStorage.getItem("abyk-splash-shown")
+    if (!lastSplash) {
+      setShowSplash(true)
     }
-  }, [resolvedTheme])
+  }, [])
   
   const handleSplashComplete = useCallback(() => {
     setShowSplash(false)
@@ -67,7 +58,7 @@ export default function HomePage() {
 
   return (
     <>
-      {showSplash && (
+      {mounted && showSplash && (
         <SplashScreen
           onComplete={handleSplashComplete}
           videoSrc={SPLASH_VIDEO}

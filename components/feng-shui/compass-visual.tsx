@@ -19,7 +19,6 @@ const ALL_DIRECTIONS: Direction[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 // Smoothly interpolate angles avoiding the 0/360 jump
 function lerpAngle(current: number, target: number, factor: number): number {
   let diff = target - current
-  // Normalize to -180..180
   while (diff > 180) diff -= 360
   while (diff < -180) diff += 360
   return current + diff * factor
@@ -28,13 +27,21 @@ function lerpAngle(current: number, target: number, factor: number): number {
 type CompassStatus = "loading" | "active" | "unavailable" | "permission-needed"
 
 export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
-  const [heading, setHeading] = useState(0) // real device heading in degrees
   const [smoothHeading, setSmoothHeading] = useState(0)
   const [status, setStatus] = useState<CompassStatus>("loading")
-  const [settled, setSettled] = useState(false)
+
+  // Use refs for values needed inside rAF / event handlers to avoid stale closures
   const headingRef = useRef(0)
   const smoothRef = useRef(0)
   const rafRef = useRef<number | null>(null)
+  const settledRef = useRef(false)
+  const onSettledRef = useRef(onSettled)
+  const mountedRef = useRef(true)
+
+  // Keep onSettled ref current
+  useEffect(() => {
+    onSettledRef.current = onSettled
+  }, [onSettled])
 
   // Map direction key to its category color
   const directionColorMap = new Map<Direction, string>()
@@ -47,97 +54,108 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
   const bestDir = directions.shengChi
   const needleTargetDeg = DIRECTION_DEGREES[bestDir]
 
-  // Smooth animation loop
-  useEffect(() => {
-    const animate = () => {
-      smoothRef.current = lerpAngle(smoothRef.current, headingRef.current, 0.12)
-      setSmoothHeading(smoothRef.current)
-      rafRef.current = requestAnimationFrame(animate)
-    }
-    rafRef.current = requestAnimationFrame(animate)
-    return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
-    }
-  }, [])
-
-  // Update ref when heading changes
-  useEffect(() => {
-    headingRef.current = heading
-  }, [heading])
-
-  // Handle device orientation (real compass)
+  // Stable orientation handler — no dependency on React state
   const handleOrientation = useCallback((e: DeviceOrientationEvent) => {
     let alpha: number | null = null
 
-    // iOS: webkitCompassHeading is the most accurate
-    if ("webkitCompassHeading" in e && typeof (e as unknown as Record<string, unknown>).webkitCompassHeading === "number") {
-      alpha = (e as unknown as Record<string, number>).webkitCompassHeading
+    // iOS: webkitCompassHeading gives true heading (0 = north, increases clockwise)
+    const evt = e as DeviceOrientationEvent & { webkitCompassHeading?: number }
+    if (typeof evt.webkitCompassHeading === "number" && !isNaN(evt.webkitCompassHeading)) {
+      alpha = evt.webkitCompassHeading
     } else if (e.alpha !== null && e.alpha !== undefined) {
-      // Android / other: alpha is rotation around Z axis (0-360)
-      // alpha = 0 means pointing to magnetic north
-      // We need to invert since alpha measures device rotation relative to north
+      // Android: alpha is rotation around Z. When device points north, alpha ~ 360 or 0
+      // The compass heading = (360 - alpha) % 360
+      // If e.absolute is true, alpha is relative to north
       alpha = (360 - e.alpha) % 360
     }
 
     if (alpha !== null && !isNaN(alpha)) {
-      setHeading(alpha)
-      if (!settled) {
-        setSettled(true)
-        onSettled?.()
+      headingRef.current = alpha
+      if (!settledRef.current) {
+        settledRef.current = true
+        onSettledRef.current?.()
       }
     }
-  }, [settled, onSettled])
+  }, []) // no dependencies — fully stable
 
-  // Request permission and start listening
+  // Smooth animation loop via rAF
   useEffect(() => {
-    let mounted = true
+    mountedRef.current = true
+
+    const animate = () => {
+      if (!mountedRef.current) return
+      smoothRef.current = lerpAngle(smoothRef.current, headingRef.current, 0.15)
+      setSmoothHeading(smoothRef.current)
+      rafRef.current = requestAnimationFrame(animate)
+    }
+    rafRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      mountedRef.current = false
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+    }
+  }, [])
+
+  // Start listening for device orientation
+  useEffect(() => {
+    let active = true
 
     const startCompass = async () => {
-      // Check if DeviceOrientationEvent exists
       if (typeof window === "undefined" || !("DeviceOrientationEvent" in window)) {
-        if (mounted) setStatus("unavailable")
+        if (active) setStatus("unavailable")
         return
       }
 
-      // iOS 13+ requires explicit permission
+      // iOS 13+ requires explicit permission via user gesture
       const DOE = DeviceOrientationEvent as unknown as {
         requestPermission?: () => Promise<string>
       }
       if (typeof DOE.requestPermission === "function") {
-        // We need user interaction to request permission on iOS
-        if (mounted) setStatus("permission-needed")
+        if (active) setStatus("permission-needed")
         return
       }
 
-      // Android / desktop — just listen
+      // Android / other — listen immediately
       window.addEventListener("deviceorientation", handleOrientation, true)
 
-      // After a short delay, if we haven't received any data, show unavailable
-      setTimeout(() => {
-        if (mounted && !settled) {
-          // Check if we received any heading data
-          // If not, we're probably on desktop
-          setStatus((prev) => (prev === "loading" ? "unavailable" : prev))
-        }
-      }, 2000)
+      // Also try 'deviceorientationabsolute' for Android (gives absolute north)
+      if ("ondeviceorientationabsolute" in window) {
+        window.addEventListener(
+          "deviceorientationabsolute" as "deviceorientation",
+          handleOrientation,
+          true,
+        )
+      }
 
-      if (mounted) setStatus("active")
+      if (active) setStatus("active")
+
+      // After 3 seconds, if no heading data, mark as unavailable (probably desktop)
+      setTimeout(() => {
+        if (active && !settledRef.current) {
+          setStatus("unavailable")
+        }
+      }, 3000)
     }
 
     startCompass()
 
     return () => {
-      mounted = false
+      active = false
       window.removeEventListener("deviceorientation", handleOrientation, true)
+      window.removeEventListener(
+        "deviceorientationabsolute" as "deviceorientation",
+        handleOrientation,
+        true,
+      )
     }
-  }, [handleOrientation, settled])
+  }, [handleOrientation])
 
-  // When settled, mark active
+  // Mark settled in status
   useEffect(() => {
-    if (settled) {
+    if (settledRef.current) {
       setStatus("active")
     }
-  }, [settled])
+  })
 
   const requestiOSPermission = async () => {
     const DOE = DeviceOrientationEvent as unknown as {
@@ -165,8 +183,9 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
   const labelR = outerR - 22
   const tickR = outerR - 4
 
-  // The compass rose rotates opposite to the heading so north stays at real north
-  const roseRotation = status === "active" && settled ? -smoothHeading : 0
+  const isLive = status === "active" && settledRef.current
+  // The compass rose rotates opposite to the heading so north direction stays at real north
+  const roseRotation = isLive ? -smoothHeading : 0
 
   return (
     <div className="relative flex flex-col items-center justify-center gap-3">
@@ -182,19 +201,19 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
       )}
 
       {/* Status indicator */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" dir="rtl">
         <span
-          className={`h-2 w-2 rounded-full ${
-            status === "active" && settled
+          className={`h-2.5 w-2.5 rounded-full ${
+            isLive
               ? "bg-green-500 animate-pulse"
               : status === "unavailable"
                 ? "bg-amber-500"
                 : "bg-muted-foreground/40 animate-pulse"
           }`}
         />
-        <span className="text-xs text-muted-foreground">
-          {status === "active" && settled
-            ? `${Math.round(smoothHeading)}°`
+        <span className="text-sm text-muted-foreground">
+          {isLive
+            ? `מצפן פעיל - ${Math.round(((smoothHeading % 360) + 360) % 360)}°`
             : status === "unavailable"
               ? "מצפן לא זמין במכשיר זה"
               : status === "permission-needed"
@@ -205,11 +224,8 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
 
       <div className="relative flex items-center justify-center">
         {/* Fixed north indicator triangle at top */}
-        <div
-          className="absolute -top-1 left-1/2 -translate-x-1/2 z-10"
-          style={{ width: 0, height: 0 }}
-        >
-          <svg width="20" height="14" viewBox="0 0 20 14">
+        <div className="absolute -top-1 left-1/2 -translate-x-1/2 z-10">
+          <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
             <polygon points="10,0 0,14 20,14" className="fill-primary" />
           </svg>
         </div>
@@ -219,39 +235,18 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
           height={size}
           viewBox={`0 0 ${size} ${size}`}
           className="drop-shadow-lg"
-          style={{
-            transform: `rotate(${roseRotation}deg)`,
-            // No transition — smooth interpolation is done via RAF
-          }}
+          style={{ transform: `rotate(${roseRotation}deg)` }}
+          aria-label="מצפן פנג שואי"
+          role="img"
         >
+          {/* Background circle */}
+          <circle cx={center} cy={center} r={outerR - 1} className="fill-card" opacity={0.95} />
+
           {/* Outer ring */}
-          <circle
-            cx={center}
-            cy={center}
-            r={outerR}
-            fill="none"
-            className="stroke-border"
-            strokeWidth={2}
-          />
+          <circle cx={center} cy={center} r={outerR} fill="none" className="stroke-border" strokeWidth={2} />
 
           {/* Inner ring */}
-          <circle
-            cx={center}
-            cy={center}
-            r={innerR}
-            fill="none"
-            className="stroke-border/50"
-            strokeWidth={1}
-          />
-
-          {/* Background circle */}
-          <circle
-            cx={center}
-            cy={center}
-            r={outerR - 1}
-            className="fill-card"
-            opacity={0.95}
-          />
+          <circle cx={center} cy={center} r={innerR} fill="none" className="stroke-border/50" strokeWidth={1} />
 
           {/* Degree ticks */}
           {Array.from({ length: 36 }).map((_, i) => {
@@ -259,24 +254,20 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
             const isMajor = i % 9 === 0
             const r1 = isMajor ? outerR - 12 : outerR - 6
             const r2 = tickR
-            const x1 = center + r1 * Math.sin(angle)
-            const y1 = center - r1 * Math.cos(angle)
-            const x2 = center + r2 * Math.sin(angle)
-            const y2 = center - r2 * Math.cos(angle)
             return (
               <line
                 key={`tick-${i}`}
-                x1={x1}
-                y1={y1}
-                x2={x2}
-                y2={y2}
+                x1={center + r1 * Math.sin(angle)}
+                y1={center - r1 * Math.cos(angle)}
+                x2={center + r2 * Math.sin(angle)}
+                y2={center - r2 * Math.cos(angle)}
                 className="stroke-muted-foreground/30"
                 strokeWidth={isMajor ? 1.5 : 0.5}
               />
             )
           })}
 
-          {/* Direction segments — highlight good directions */}
+          {/* Direction color segments */}
           {ALL_DIRECTIONS.map((dir) => {
             const deg = DIRECTION_DEGREES[dir]
             const color = directionColorMap.get(dir)
@@ -301,13 +292,12 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
                 key={`seg-${dir}`}
                 d={`M ${x1s} ${y1s} L ${x1e} ${y1e} A ${r2} ${r2} 0 0 1 ${x2e} ${y2e} L ${x2s} ${y2s} A ${r1} ${r1} 0 0 0 ${x1s} ${y1s}`}
                 fill={color}
-                opacity={settled ? 0.25 : 0.1}
-                style={{ transition: "opacity 1s ease-in-out" }}
+                opacity={0.25}
               />
             )
           })}
 
-          {/* Direction labels — counter-rotate so text stays upright */}
+          {/* Direction labels */}
           {ALL_DIRECTIONS.map((dir) => {
             const deg = DIRECTION_DEGREES[dir]
             const angle = (deg * Math.PI) / 180
@@ -346,13 +336,11 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
               transformOrigin: `${center}px ${center}px`,
             }}
           >
-            {/* North half (red/primary) */}
             <polygon
               points={`${center},${center - innerR + 15} ${center - 5},${center} ${center + 5},${center}`}
               className="fill-primary"
               opacity={0.9}
             />
-            {/* South half (lighter) */}
             <polygon
               points={`${center},${center + innerR - 15} ${center - 5},${center} ${center + 5},${center}`}
               className="fill-muted-foreground/30"
