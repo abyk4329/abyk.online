@@ -143,18 +143,22 @@ function CompassContent({ purchase }: { purchase: PurchaseData }) {
           <div className="flex flex-col items-center py-4 space-y-4">
             <CompassVisual directions={directions} onSettled={handleSettled} />
             {compassSettled && (
-              <div className="flex flex-wrap justify-center gap-2 pt-2">
+              <div className="flex flex-col gap-2 pt-3 w-full">
                 {DIRECTION_CATEGORIES.map((cat) => {
                   const dir = directions[cat.key]
                   return (
-                    <span
+                    <div
                       key={cat.key}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border ${cat.color} border-current/20 bg-current/5`}
+                      className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-border/40 bg-muted/30"
                       style={{ transition: "opacity 0.5s", opacity: compassSettled ? 1 : 0 }}
                     >
-                      <span className="font-medium">{DIRECTION_LABELS[dir]}</span>
-                      <span className="opacity-60">{cat.label}</span>
-                    </span>
+                      <span className={`text-xl font-semibold ${cat.color}`}>
+                        {DIRECTION_LABELS[dir]}
+                      </span>
+                      <span className="text-base text-foreground/70 text-right">
+                        {cat.label}
+                      </span>
+                    </div>
                   )
                 })}
               </div>
@@ -172,17 +176,15 @@ function CompassContent({ purchase }: { purchase: PurchaseData }) {
             const dir = directions[cat.key]
             return (
               <PencilCard key={cat.key}>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">{dir}</span>
-                    <div className="flex items-center gap-2 flex-row-reverse">
-                      <span className={`text-lg font-medium ${cat.color}`}>{cat.label}</span>
-                    </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-muted-foreground font-mono tracking-wider">{dir}</span>
+                    <span className={`text-xl font-medium ${cat.color} text-right`}>{cat.label}</span>
                   </div>
-                  <div className="flex items-center gap-2 justify-end">
-                    <span className="text-2xl text-foreground">{DIRECTION_LABELS[dir]}</span>
+                  <div className="flex items-center justify-end">
+                    <span className="text-3xl font-semibold text-foreground">{DIRECTION_LABELS[dir]}</span>
                   </div>
-                  <p className="text-foreground/70 leading-relaxed text-right text-base">
+                  <p className="text-foreground/70 leading-loose text-right text-lg">
                     {cat.description}
                   </p>
                 </div>
