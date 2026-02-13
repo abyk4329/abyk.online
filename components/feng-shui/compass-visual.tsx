@@ -24,6 +24,20 @@ function lerpAngle(current: number, target: number, factor: number): number {
   return current + diff * factor
 }
 
+/** Return which direction sector (45-deg wide) a given heading falls into */
+function headingToDirection(heading: number): Direction {
+  const h = ((heading % 360) + 360) % 360
+  // Each direction spans 45 degrees centered on its DIRECTION_DEGREES value
+  if (h >= 337.5 || h < 22.5) return "N"
+  if (h >= 22.5 && h < 67.5) return "NE"
+  if (h >= 67.5 && h < 112.5) return "E"
+  if (h >= 112.5 && h < 157.5) return "SE"
+  if (h >= 157.5 && h < 202.5) return "S"
+  if (h >= 202.5 && h < 247.5) return "SW"
+  if (h >= 247.5 && h < 292.5) return "W"
+  return "NW"
+}
+
 type CompassStatus = "loading" | "active" | "unavailable" | "permission-needed"
 
 export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
@@ -50,22 +64,14 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
     directionColorMap.set(dir, cat.colorHex)
   }
 
-  // Best direction for needle
-  const bestDir = directions.shengChi
-  const needleTargetDeg = DIRECTION_DEGREES[bestDir]
-
-  // Stable orientation handler — no dependency on React state
+  // Stable orientation handler
   const handleOrientation = useCallback((e: DeviceOrientationEvent) => {
     let alpha: number | null = null
 
-    // iOS: webkitCompassHeading gives true heading (0 = north, increases clockwise)
     const evt = e as DeviceOrientationEvent & { webkitCompassHeading?: number }
     if (typeof evt.webkitCompassHeading === "number" && !isNaN(evt.webkitCompassHeading)) {
       alpha = evt.webkitCompassHeading
     } else if (e.alpha !== null && e.alpha !== undefined) {
-      // Android: alpha is rotation around Z. When device points north, alpha ~ 360 or 0
-      // The compass heading = (360 - alpha) % 360
-      // If e.absolute is true, alpha is relative to north
       alpha = (360 - e.alpha) % 360
     }
 
@@ -76,7 +82,7 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
         onSettledRef.current?.()
       }
     }
-  }, []) // no dependencies — fully stable
+  }, [])
 
   // Smooth animation loop via rAF
   useEffect(() => {
@@ -106,7 +112,6 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
         return
       }
 
-      // iOS 13+ requires explicit permission via user gesture
       const DOE = DeviceOrientationEvent as unknown as {
         requestPermission?: () => Promise<string>
       }
@@ -115,10 +120,8 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
         return
       }
 
-      // Android / other — listen immediately
       window.addEventListener("deviceorientation", handleOrientation, true)
 
-      // Also try 'deviceorientationabsolute' for Android (gives absolute north)
       if ("ondeviceorientationabsolute" in window) {
         window.addEventListener(
           "deviceorientationabsolute" as "deviceorientation",
@@ -129,7 +132,6 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
 
       if (active) setStatus("active")
 
-      // After 3 seconds, if no heading data, mark as unavailable (probably desktop)
       setTimeout(() => {
         if (active && !settledRef.current) {
           setStatus("unavailable")
@@ -150,7 +152,6 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
     }
   }, [handleOrientation])
 
-  // Mark settled in status
   useEffect(() => {
     if (settledRef.current) {
       setStatus("active")
@@ -178,14 +179,25 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
 
   const size = 320
   const center = size / 2
-  const outerR = size / 2 - 10
-  const innerR = outerR - 45
+  const outerR = size / 2 - 16 // leave room for arrow outside
+  const innerR = outerR - 44
   const labelR = outerR - 22
   const tickR = outerR - 4
 
   const isLive = status === "active" && settledRef.current
-  // The compass rose rotates opposite to the heading so north direction stays at real north
   const roseRotation = isLive ? -smoothHeading : 0
+
+  // Current direction the phone is pointing at (the arrow/top points to this direction)
+  const currentDir = isLive ? headingToDirection(smoothHeading) : null
+  const currentDirLabel = currentDir ? DIRECTION_LABELS[currentDir] : ""
+  const currentDirColor = currentDir ? directionColorMap.get(currentDir) : undefined
+
+  // Split two-word direction labels for stacking
+  function splitLabel(dir: Direction): string[] {
+    const label = DIRECTION_LABELS[dir]
+    const parts = label.split(" ")
+    return parts
+  }
 
   return (
     <div className="relative flex flex-col items-center justify-center gap-3">
@@ -223,10 +235,10 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
       </div>
 
       <div className="relative flex items-center justify-center">
-        {/* Fixed north indicator triangle at top */}
-        <div className="absolute -top-1 left-1/2 -translate-x-1/2 z-10">
-          <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
-            <polygon points="10,0 0,14 20,14" className="fill-primary" />
+        {/* Fixed external arrow indicator at top */}
+        <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10">
+          <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true">
+            <polygon points="9,0 1,12 17,12" className="fill-primary" />
           </svg>
         </div>
 
@@ -240,7 +252,7 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
           role="img"
         >
           {/* Background circle */}
-          <circle cx={center} cy={center} r={outerR - 1} className="fill-card" opacity={0.95} />
+          <circle cx={center} cy={center} r={outerR} className="fill-card" opacity={0.95} />
 
           {/* Outer ring */}
           <circle cx={center} cy={center} r={outerR} fill="none" className="stroke-border" strokeWidth={2} />
@@ -297,7 +309,7 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
             )
           })}
 
-          {/* Direction labels */}
+          {/* Direction labels — stacked for two-word labels */}
           {ALL_DIRECTIONS.map((dir) => {
             const deg = DIRECTION_DEGREES[dir]
             const angle = (deg * Math.PI) / 180
@@ -305,6 +317,7 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
             const y = center - labelR * Math.cos(angle)
             const color = directionColorMap.get(dir)
             const isCardinal = ["N", "S", "E", "W"].includes(dir)
+            const parts = splitLabel(dir)
 
             return (
               <text
@@ -313,38 +326,66 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
                 y={y}
                 textAnchor="middle"
                 dominantBaseline="central"
-                className={isCardinal ? "text-[13px] font-medium" : "text-[10px]"}
+                className={isCardinal ? "text-[13px] font-semibold" : "text-[10px] font-medium"}
                 fill={color || "currentColor"}
                 style={{
                   transform: `rotate(${-roseRotation}deg)`,
                   transformOrigin: `${x}px ${y}px`,
                 }}
               >
-                {DIRECTION_LABELS[dir]}
+                {parts.length === 1 ? (
+                  parts[0]
+                ) : (
+                  <>
+                    <tspan x={x} dy="-0.5em">{parts[0]}</tspan>
+                    <tspan x={x} dy="1em">{parts[1]}</tspan>
+                  </>
+                )}
               </text>
             )
           })}
 
-          {/* Center decorative circle */}
-          <circle cx={center} cy={center} r={12} className="fill-primary/20 stroke-primary/40" strokeWidth={1} />
-          <circle cx={center} cy={center} r={4} className="fill-primary" />
-
-          {/* Compass needle pointing to Sheng Chi direction */}
+          {/* Center: current direction label (counter-rotated to stay readable) */}
           <g
             style={{
-              transform: `rotate(${needleTargetDeg}deg)`,
+              transform: `rotate(${-roseRotation}deg)`,
               transformOrigin: `${center}px ${center}px`,
             }}
           >
-            <polygon
-              points={`${center},${center - innerR + 15} ${center - 5},${center} ${center + 5},${center}`}
-              className="fill-primary"
-              opacity={0.9}
-            />
-            <polygon
-              points={`${center},${center + innerR - 15} ${center - 5},${center} ${center + 5},${center}`}
-              className="fill-muted-foreground/30"
-            />
+            {currentDirLabel ? (
+              (() => {
+                const parts = currentDirLabel.split(" ")
+                if (parts.length === 1) {
+                  return (
+                    <text
+                      x={center}
+                      y={center}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      className="text-[18px] font-bold"
+                      fill={currentDirColor || "currentColor"}
+                    >
+                      {parts[0]}
+                    </text>
+                  )
+                }
+                return (
+                  <text
+                    x={center}
+                    y={center}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    className="text-[16px] font-bold"
+                    fill={currentDirColor || "currentColor"}
+                  >
+                    <tspan x={center} dy="-0.55em">{parts[0]}</tspan>
+                    <tspan x={center} dy="1.1em">{parts[1]}</tspan>
+                  </text>
+                )
+              })()
+            ) : (
+              <circle cx={center} cy={center} r={6} className="fill-muted-foreground/20" />
+            )}
           </g>
         </svg>
       </div>
