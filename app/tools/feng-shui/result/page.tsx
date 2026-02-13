@@ -11,17 +11,18 @@ import { useTheme } from "@/components/theme-provider"
 import { PencilCard } from "@/components/ui/pencil-card"
 import {
   calculateKua,
-  getKuaEnergyDescription,
+  getKuaEnergySegments,
   genderText,
   KUA_TITLES,
   type Gender,
 } from "@/lib/feng-shui-data"
+import { EnergyDescription } from "@/components/feng-shui/energy-description"
 
 function ResultContent({ birthDate, gender }: { birthDate: string; gender: Gender }) {
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
   const result = calculateKua(birthDate, gender)
-  const energyDescription = getKuaEnergyDescription(result.rawKua, gender)
+  const energySegments = getKuaEnergySegments(result.rawKua, gender)
   const g = (m: string, f: string) => genderText(gender, m, f)
 
   const handlePurchase = () => {
@@ -102,9 +103,7 @@ function ResultContent({ birthDate, gender }: { birthDate: string; gender: Gende
             </div>
 
             {/* Energy Description */}
-            <p className="text-foreground/75 leading-loose text-lg tracking-tight text-right">
-              {energyDescription}
-            </p>
+            <EnergyDescription segments={energySegments} />
           </div>
         </PencilCard>
 
