@@ -608,11 +608,6 @@ export function getKuaEnergySegments(kua: number, gender: Gender): EnergySegment
   return gender === "male" ? entry.male : entry.female
 }
 
-  const entry = descriptions[kua]
-  if (!entry) return ""
-  return gender === "male" ? entry.male : entry.female
-}
-
 // --- Practical usage guides (gendered) ---
 export interface UsageGuide {
   title: string
