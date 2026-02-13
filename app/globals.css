@@ -1,0 +1,253 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Atlantis-inspired color palette for Awakening by Ksenia */
+:root {
+  /* Light mode - matching the gold/warm logo aesthetic */
+  --background: #ffffff;
+  --foreground: rgb(110, 98, 89);
+  /* Cards - nearly white with warmth */
+  --card: #fdfcfa;
+  --card-foreground: rgb(110, 98, 89);
+  --popover: #fdfcfa;
+  --popover-foreground: rgb(110, 98, 89);
+
+  /* Primary - warm gold to match logo */
+  --primary: #b8a07a;
+  --primary-foreground: #ffffff;
+
+  /* Secondary - soft warm gray */
+  --secondary: #ece6de;
+  --secondary-foreground: rgb(110, 98, 89);
+
+  /* Muted */
+  --muted: #ece6de;
+  --muted-foreground: #9a928a;
+
+  /* Accent - subtle gold */
+  --accent: #c9b896;
+  --accent-foreground: rgb(110, 98, 89);
+
+  --destructive: rgb(168, 140, 140);
+  --destructive-foreground: #ffffff;
+
+  /* Borders & Inputs - pencil-thin warm gray */
+  --border: #d4cdc4;
+  --input: #f0ebe4;
+  --ring: #b8a07a;
+
+  --radius: 0.75rem;
+
+  /* Pastel color palette - warm tones to match logo */
+  --pastel-pink: #f0e4dc;
+  --pastel-pink-foreground: #6b5b50;
+
+  --pastel-green: #e6ece4;
+  --pastel-green-foreground: #4a5648;
+
+  --pastel-gold: #f0e8d4;
+  --pastel-gold-foreground: #6b5f44;
+
+  --pastel-blue: #e2e8ee;
+  --pastel-blue-foreground: #4a5460;
+
+  /* Sidebar */
+  --sidebar: #ffffff;
+  --sidebar-foreground: rgb(110, 98, 89);
+  --sidebar-primary: #b8a07a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ece6de;
+  --sidebar-accent-foreground: #3d3a36;
+  --sidebar-border: #d4cdc4;
+  --sidebar-ring: #b8a07a;
+}
+
+.dark {
+  /* Updated to user's exact dark mode color palette */
+  /* Main background - #2d3436 (dark gray) */
+  --background: rgb(65, 69, 71);
+  /* Text on buttons - #e8dfd5 (light beige) */
+  --foreground: rgb(255, 244, 237);
+  /* Card - slightly lighter than bg for contrast */
+  --card: #363d3f;
+  --card-foreground: #e8dfd5;
+  --popover: rgb(46, 50, 51);
+  --popover-foreground: #e8dfd5;
+
+  /* Primary button (highlighted) - #c9a882 (light brown/gold) */
+  --primary: rgb(186, 167, 145);
+  /* Text on primary button - #2d3436 (dark gray) */
+  --primary-foreground: rgb(63, 55, 55);
+
+  /* Secondary */
+  --secondary: rgb(108, 118, 122);
+  --secondary-foreground: #e8dfd5;
+
+  /* Muted */
+  --muted: #353b3d;
+  /* Copyright text - #8a8a8a (medium gray) */
+  --muted-foreground: rgb(192, 176, 161);
+
+  /* Accent - Button hover - #3d4446 (even darker gray) */
+  --accent: #3d4446;
+  --accent-foreground: #e8dfd5;
+
+  --destructive: rgb(192, 142, 143);
+  --destructive-foreground: rgb(213, 200, 185);
+
+  /* Borders & Inputs - slightly gold tinted */
+  --border: rgb(186, 167, 145);
+  --input: rgb(63, 66, 69);
+  /* Icons and title - #c9a882 (light brown/gold) */
+  --ring: rgb(187, 174, 160);
+
+  /* Dark mode pastel colors - using the color palette */
+  /* Pastel Pink - Dark */
+  --pastel-pink: #c9a882;
+  --pastel-pink-foreground: #2d3436;
+
+  /* Pastel Green - Dark */
+  --pastel-green: #3d4446;
+  --pastel-green-foreground: #e8dfd5;
+
+  /* Pastel Gold - Dark */
+  --pastel-gold: #c9a882;
+  --pastel-gold-foreground: #2d3436;
+
+  /* Pastel Blue - Dark */
+  --pastel-blue: #353b3d;
+  --pastel-blue-foreground: #e8dfd5;
+
+  /* Sidebar - Dark */
+  --sidebar: rgb(65, 69, 71);
+  --sidebar-foreground: #e8dfd5;
+  --sidebar-primary: rgb(175, 159, 120);
+  --sidebar-primary-foreground: rgb(65, 69, 71);
+  --sidebar-accent: rgb(61, 66, 68);
+  --sidebar-accent-foreground: #e8dfd5;
+  --sidebar-border: rgb(186, 167, 145);
+  --sidebar-ring: rgb(186, 167, 145);
+}
+
+@theme inline {
+  --font-sans: 'Assistant', 'Assistant Fallback';
+  --font-mono: "Geist Mono", "Geist Mono Fallback", monospace;
+
+  /* Bumped text scale: base+2px across the board */
+  --font-size-xs: 0.8125rem;     /* 13px (was 12px) */
+  --font-size-sm: 0.9375rem;     /* 15px (was 14px) */
+  --font-size-base: 1.125rem;    /* 18px (was 16px) */
+  --font-size-lg: 1.25rem;       /* 20px (was 18px) */
+  --font-size-xl: 1.375rem;      /* 22px (was 20px) */
+  --font-size-2xl: 1.625rem;     /* 26px (was 24px) */
+  --font-size-3xl: 2rem;         /* 32px (was 30px) */
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Added pastel color utilities */
+  --color-pastel-pink: var(--pastel-pink);
+  --color-pastel-pink-foreground: var(--pastel-pink-foreground);
+  --color-pastel-green: var(--pastel-green);
+  --color-pastel-green-foreground: var(--pastel-green-foreground);
+  --color-pastel-gold: var(--pastel-gold);
+  --color-pastel-gold-foreground: var(--pastel-gold-foreground);
+  --color-pastel-blue: var(--pastel-blue);
+  --color-pastel-blue-foreground: var(--pastel-blue-foreground);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 16px);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* RTL Support */
+  html {
+    direction: rtl;
+  }
+
+  /* Safe area for mobile */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .safe-area-pt {
+    padding-top: env(safe-area-inset-top, 0);
+  }
+}
+
+/* Animations */
+@keyframes pulse-gentle {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-pulse-gentle {
+  animation: pulse-gentle 4s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Custom letter spacing for Hebrew */
+.tracking-hebrew {
+  letter-spacing: 0.05em;
+}
+
+.tracking-hebrew-wide {
+  letter-spacing: 0.1em;
+}
