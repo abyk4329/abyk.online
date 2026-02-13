@@ -16,6 +16,18 @@ interface CompassVisualProps {
 
 const ALL_DIRECTIONS: Direction[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 
+// English abbreviations for the outer ring
+const DIRECTION_EN: Record<Direction, string> = {
+  N: "N",
+  NE: "NE",
+  E: "E",
+  SE: "SE",
+  S: "S",
+  SW: "SW",
+  W: "W",
+  NW: "NW",
+}
+
 // Smoothly interpolate angles avoiding the 0/360 jump
 function lerpAngle(current: number, target: number, factor: number): number {
   let diff = target - current
@@ -27,7 +39,6 @@ function lerpAngle(current: number, target: number, factor: number): number {
 /** Return which direction sector (45-deg wide) a given heading falls into */
 function headingToDirection(heading: number): Direction {
   const h = ((heading % 360) + 360) % 360
-  // Each direction spans 45 degrees centered on its DIRECTION_DEGREES value
   if (h >= 337.5 || h < 22.5) return "N"
   if (h >= 22.5 && h < 67.5) return "NE"
   if (h >= 67.5 && h < 112.5) return "E"
@@ -44,7 +55,6 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
   const [smoothHeading, setSmoothHeading] = useState(0)
   const [status, setStatus] = useState<CompassStatus>("loading")
 
-  // Use refs for values needed inside rAF / event handlers to avoid stale closures
   const headingRef = useRef(0)
   const smoothRef = useRef(0)
   const rafRef = useRef<number | null>(null)
@@ -52,7 +62,6 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
   const onSettledRef = useRef(onSettled)
   const mountedRef = useRef(true)
 
-  // Keep onSettled ref current
   useEffect(() => {
     onSettledRef.current = onSettled
   }, [onSettled])
@@ -64,17 +73,14 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
     directionColorMap.set(dir, cat.colorHex)
   }
 
-  // Stable orientation handler
   const handleOrientation = useCallback((e: DeviceOrientationEvent) => {
     let alpha: number | null = null
-
     const evt = e as DeviceOrientationEvent & { webkitCompassHeading?: number }
     if (typeof evt.webkitCompassHeading === "number" && !isNaN(evt.webkitCompassHeading)) {
       alpha = evt.webkitCompassHeading
     } else if (e.alpha !== null && e.alpha !== undefined) {
       alpha = (360 - e.alpha) % 360
     }
-
     if (alpha !== null && !isNaN(alpha)) {
       headingRef.current = alpha
       if (!settledRef.current) {
@@ -84,10 +90,9 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
     }
   }, [])
 
-  // Smooth animation loop via rAF
+  // Smooth animation loop
   useEffect(() => {
     mountedRef.current = true
-
     const animate = () => {
       if (!mountedRef.current) return
       smoothRef.current = lerpAngle(smoothRef.current, headingRef.current, 0.15)
@@ -95,7 +100,6 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
       rafRef.current = requestAnimationFrame(animate)
     }
     rafRef.current = requestAnimationFrame(animate)
-
     return () => {
       mountedRef.current = false
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
@@ -105,13 +109,11 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
   // Start listening for device orientation
   useEffect(() => {
     let active = true
-
     const startCompass = async () => {
       if (typeof window === "undefined" || !("DeviceOrientationEvent" in window)) {
         if (active) setStatus("unavailable")
         return
       }
-
       const DOE = DeviceOrientationEvent as unknown as {
         requestPermission?: () => Promise<string>
       }
@@ -119,9 +121,7 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
         if (active) setStatus("permission-needed")
         return
       }
-
       window.addEventListener("deviceorientation", handleOrientation, true)
-
       if ("ondeviceorientationabsolute" in window) {
         window.addEventListener(
           "deviceorientationabsolute" as "deviceorientation",
@@ -129,18 +129,14 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
           true,
         )
       }
-
       if (active) setStatus("active")
-
       setTimeout(() => {
         if (active && !settledRef.current) {
           setStatus("unavailable")
         }
       }, 3000)
     }
-
     startCompass()
-
     return () => {
       active = false
       window.removeEventListener("deviceorientation", handleOrientation, true)
@@ -153,9 +149,7 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
   }, [handleOrientation])
 
   useEffect(() => {
-    if (settledRef.current) {
-      setStatus("active")
-    }
+    if (settledRef.current) setStatus("active")
   })
 
   const requestiOSPermission = async () => {
@@ -177,27 +171,21 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
     }
   }
 
+  /* ---------- Layout constants ---------- */
   const size = 320
   const center = size / 2
-  const outerR = size / 2 - 16 // leave room for arrow outside
-  const innerR = outerR - 44
-  const labelR = outerR - 22
-  const tickR = outerR - 4
+  const outerR = size / 2 - 18
+  const ringWidth = 36
+  const innerR = outerR - ringWidth
+  const labelR = outerR - ringWidth / 2 // center of the ring band
+  const centerR = innerR - 6 // inner area radius
 
   const isLive = status === "active" && settledRef.current
   const roseRotation = isLive ? -smoothHeading : 0
 
-  // Current direction the phone is pointing at (the arrow/top points to this direction)
   const currentDir = isLive ? headingToDirection(smoothHeading) : null
   const currentDirLabel = currentDir ? DIRECTION_LABELS[currentDir] : ""
   const currentDirColor = currentDir ? directionColorMap.get(currentDir) : undefined
-
-  // Split two-word direction labels for stacking
-  function splitLabel(dir: Direction): string[] {
-    const label = DIRECTION_LABELS[dir]
-    const parts = label.split(" ")
-    return parts
-  }
 
   return (
     <div className="relative flex flex-col items-center justify-center gap-3">
@@ -235,10 +223,10 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
       </div>
 
       <div className="relative flex items-center justify-center">
-        {/* Fixed external arrow indicator at top */}
-        <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10">
-          <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true">
-            <polygon points="9,0 1,12 17,12" className="fill-primary" />
+        {/* Fixed external arrow at top */}
+        <div className="absolute -top-1 left-1/2 -translate-x-1/2 z-10">
+          <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
+            <polygon points="10,0 2,14 18,14" className="fill-primary" />
           </svg>
         </div>
 
@@ -247,39 +235,14 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
           height={size}
           viewBox={`0 0 ${size} ${size}`}
           className="drop-shadow-lg"
-          style={{ transform: `rotate(${roseRotation}deg)` }}
+          style={{ transform: `rotate(${roseRotation}deg)`, transition: "none" }}
           aria-label="מצפן פנג שואי"
           role="img"
         >
           {/* Background circle */}
-          <circle cx={center} cy={center} r={outerR} className="fill-card" opacity={0.95} />
+          <circle cx={center} cy={center} r={outerR} className="fill-card" opacity={0.97} />
 
-          {/* Outer ring */}
-          <circle cx={center} cy={center} r={outerR} fill="none" className="stroke-border" strokeWidth={2} />
-
-          {/* Inner ring */}
-          <circle cx={center} cy={center} r={innerR} fill="none" className="stroke-border/50" strokeWidth={1} />
-
-          {/* Degree ticks */}
-          {Array.from({ length: 36 }).map((_, i) => {
-            const angle = (i * 10 * Math.PI) / 180
-            const isMajor = i % 9 === 0
-            const r1 = isMajor ? outerR - 12 : outerR - 6
-            const r2 = tickR
-            return (
-              <line
-                key={`tick-${i}`}
-                x1={center + r1 * Math.sin(angle)}
-                y1={center - r1 * Math.cos(angle)}
-                x2={center + r2 * Math.sin(angle)}
-                y2={center - r2 * Math.cos(angle)}
-                className="stroke-muted-foreground/30"
-                strokeWidth={isMajor ? 1.5 : 0.5}
-              />
-            )
-          })}
-
-          {/* Direction color segments */}
+          {/* Colored direction segments in the ring band */}
           {ALL_DIRECTIONS.map((dir) => {
             const deg = DIRECTION_DEGREES[dir]
             const color = directionColorMap.get(dir)
@@ -287,29 +250,75 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
 
             const startAngle = ((deg - 22.5) * Math.PI) / 180
             const endAngle = ((deg + 22.5) * Math.PI) / 180
-            const r1 = innerR + 2
-            const r2 = outerR - 2
 
-            const x1s = center + r1 * Math.sin(startAngle)
-            const y1s = center - r1 * Math.cos(startAngle)
-            const x1e = center + r2 * Math.sin(startAngle)
-            const y1e = center - r2 * Math.cos(startAngle)
-            const x2s = center + r1 * Math.sin(endAngle)
-            const y2s = center - r1 * Math.cos(endAngle)
-            const x2e = center + r2 * Math.sin(endAngle)
-            const y2e = center - r2 * Math.cos(endAngle)
+            const x1i = center + innerR * Math.sin(startAngle)
+            const y1i = center - innerR * Math.cos(startAngle)
+            const x1o = center + outerR * Math.sin(startAngle)
+            const y1o = center - outerR * Math.cos(startAngle)
+            const x2i = center + innerR * Math.sin(endAngle)
+            const y2i = center - innerR * Math.cos(endAngle)
+            const x2o = center + outerR * Math.sin(endAngle)
+            const y2o = center - outerR * Math.cos(endAngle)
 
             return (
               <path
                 key={`seg-${dir}`}
-                d={`M ${x1s} ${y1s} L ${x1e} ${y1e} A ${r2} ${r2} 0 0 1 ${x2e} ${y2e} L ${x2s} ${y2s} A ${r1} ${r1} 0 0 0 ${x1s} ${y1s}`}
+                d={`M ${x1i} ${y1i} L ${x1o} ${y1o} A ${outerR} ${outerR} 0 0 1 ${x2o} ${y2o} L ${x2i} ${y2i} A ${innerR} ${innerR} 0 0 0 ${x1i} ${y1i}`}
                 fill={color}
-                opacity={0.25}
+                opacity={0.2}
               />
             )
           })}
 
-          {/* Direction labels — stacked for two-word labels */}
+          {/* Divider lines between each direction sector */}
+          {ALL_DIRECTIONS.map((dir) => {
+            const deg = DIRECTION_DEGREES[dir]
+            const borderAngle = ((deg - 22.5) * Math.PI) / 180
+            const x1 = center + innerR * Math.sin(borderAngle)
+            const y1 = center - innerR * Math.cos(borderAngle)
+            const x2 = center + outerR * Math.sin(borderAngle)
+            const y2 = center - outerR * Math.cos(borderAngle)
+            return (
+              <line
+                key={`div-${dir}`}
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                className="stroke-border"
+                strokeWidth={1}
+                opacity={0.6}
+              />
+            )
+          })}
+
+          {/* Outer ring border */}
+          <circle cx={center} cy={center} r={outerR} fill="none" className="stroke-border" strokeWidth={2} />
+
+          {/* Inner ring border */}
+          <circle cx={center} cy={center} r={innerR} fill="none" className="stroke-border" strokeWidth={1.5} />
+
+          {/* Degree ticks on outer edge */}
+          {Array.from({ length: 72 }).map((_, i) => {
+            const angle = (i * 5 * Math.PI) / 180
+            const isMajor = i % 9 === 0
+            const isMid = i % 9 !== 0 && i % 3 === 0
+            const r1 = isMajor ? outerR - 10 : isMid ? outerR - 6 : outerR - 3
+            const r2 = outerR
+            return (
+              <line
+                key={`tick-${i}`}
+                x1={center + r1 * Math.sin(angle)}
+                y1={center - r1 * Math.cos(angle)}
+                x2={center + r2 * Math.sin(angle)}
+                y2={center - r2 * Math.cos(angle)}
+                className="stroke-muted-foreground/40"
+                strokeWidth={isMajor ? 1.5 : 0.5}
+              />
+            )
+          })}
+
+          {/* English abbreviations on the ring band */}
           {ALL_DIRECTIONS.map((dir) => {
             const deg = DIRECTION_DEGREES[dir]
             const angle = (deg * Math.PI) / 180
@@ -317,7 +326,6 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
             const y = center - labelR * Math.cos(angle)
             const color = directionColorMap.get(dir)
             const isCardinal = ["N", "S", "E", "W"].includes(dir)
-            const parts = splitLabel(dir)
 
             return (
               <text
@@ -326,26 +334,23 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
                 y={y}
                 textAnchor="middle"
                 dominantBaseline="central"
-                className={isCardinal ? "text-[13px] font-semibold" : "text-[10px] font-medium"}
+                fontSize={isCardinal ? 16 : 12}
+                fontWeight={isCardinal ? 700 : 600}
                 fill={color || "currentColor"}
                 style={{
                   transform: `rotate(${-roseRotation}deg)`,
                   transformOrigin: `${x}px ${y}px`,
                 }}
               >
-                {parts.length === 1 ? (
-                  parts[0]
-                ) : (
-                  <>
-                    <tspan x={x} dy="-0.5em">{parts[0]}</tspan>
-                    <tspan x={x} dy="1em">{parts[1]}</tspan>
-                  </>
-                )}
+                {DIRECTION_EN[dir]}
               </text>
             )
           })}
 
-          {/* Center: current direction label (counter-rotated to stay readable) */}
+          {/* Center area background */}
+          <circle cx={center} cy={center} r={centerR} className="fill-card" opacity={0.6} />
+
+          {/* Center: Hebrew direction label (counter-rotated) */}
           <g
             style={{
               transform: `rotate(${-roseRotation}deg)`,
@@ -362,7 +367,8 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
                       y={center}
                       textAnchor="middle"
                       dominantBaseline="central"
-                      className="text-[18px] font-bold"
+                      fontSize={26}
+                      fontWeight={700}
                       fill={currentDirColor || "currentColor"}
                     >
                       {parts[0]}
@@ -375,17 +381,16 @@ export function CompassVisual({ directions, onSettled }: CompassVisualProps) {
                     y={center}
                     textAnchor="middle"
                     dominantBaseline="central"
-                    className="text-[16px] font-bold"
+                    fontSize={22}
+                    fontWeight={700}
                     fill={currentDirColor || "currentColor"}
                   >
-                    <tspan x={center} dy="-0.55em">{parts[0]}</tspan>
-                    <tspan x={center} dy="1.1em">{parts[1]}</tspan>
+                    <tspan x={center} dy="-0.6em">{parts[0]}</tspan>
+                    <tspan x={center} dy="1.2em">{parts[1]}</tspan>
                   </text>
                 )
               })()
-            ) : (
-              <circle cx={center} cy={center} r={6} className="fill-muted-foreground/20" />
-            )}
+            ) : null}
           </g>
         </svg>
       </div>
